@@ -1,0 +1,35 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "pulsar-toolbox",
+  "version": "0.1.0",
+  "identifier": "com.vanjorde.pulsartoolbox",
+  "build": {
+    "frontendDist": "../out",
+    "devUrl": "http://localhost:3000",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Pulsar Toolbox | v-0.1",
+        "width": 1400,
+        "height": 1050,
+        "minWidth": 900,
+        "minHeight": 700,
+        "resizable": true,
+        "fullscreen": false,
+        "dragDropEnabled": false,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ipc: http://localhost:* http://127.0.0.1:* https://* ws://localhost:* ws://127.0.0.1:* wss://*;"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": ["icons/logo.png", "icons/logo.ico"]
+  }
+}
