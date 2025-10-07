@@ -5,7 +5,7 @@ description = "A desktop-friendly dashboard for exploring and testing Pulsar clu
 authors = ["vanjorde"]
 license = "MIT"
 repository = "https://github.com/vanjorde/pulsar-toolbox"
-edition = "2025"
+edition = "2021"
 rust-version = "1.77.2"
 
 [lib]
