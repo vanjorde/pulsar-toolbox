@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "pulsar-toolbox",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "identifier": "com.vanjorde.pulsartoolbox",
   "build": {
     "frontendDist": "../out",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Pulsar Toolbox | v-0.1",
+        "title": "Pulsar Toolbox | v-0.3",
         "width": 1400,
         "height": 1050,
         "minWidth": 900,

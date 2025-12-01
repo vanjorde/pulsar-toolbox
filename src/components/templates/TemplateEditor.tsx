@@ -1,6 +1,6 @@
 "use client";
 import React, { useLayoutEffect, useMemo, useState, useEffect } from "react";
-import { formatJsonString, getJsonError } from "@/lib/json";
+import { formatPayloadString, validatePayload } from "@/lib/payload";
 import type { Template } from "@/types/pulsar";
 
 export function TemplateEditor({
@@ -35,7 +35,8 @@ export function TemplateEditor({
     setShowDeleteConfirm(false);
   }, [baselineName, baselinePayload, template.id]);
 
-  const jsonError = useMemo(() => getJsonError(payload), [payload]);
+  const payloadValidation = useMemo(() => validatePayload(payload), [payload]);
+  const payloadError = payloadValidation.error;
 
   const isDirty = name !== baselineName || payload !== baselinePayload;
   const showRevert = touched && isDirty;
@@ -49,8 +50,8 @@ export function TemplateEditor({
     setTouched(true);
   }
 
-  function formatJson() {
-    const result = formatJsonString(payload, 2);
+  function formatPayload() {
+    const result = formatPayloadString(payload, 2);
     if (!result.ok) {
       return;
     }
@@ -65,7 +66,7 @@ export function TemplateEditor({
   }
 
   function handleSave() {
-    if (jsonError) return;
+    if (payloadError) return;
     const nextName = name.trim() || baselineName;
     onUpdate({ ...template, name: nextName, payload });
   }
@@ -91,7 +92,7 @@ export function TemplateEditor({
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [jsonError, name, payload, baselineName, baselinePayload]);
+  }, [payloadError, name, payload, baselineName, baselinePayload]);
 
   return (
     <div className="flex flex-col h-full">
@@ -108,7 +109,7 @@ export function TemplateEditor({
             value={name}
             onChange={(e) => onNameChange(e.target.value)}
             placeholder="Template name"
-            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+            className="w-full px-3 py-2 bg-input border border-border rounded-lg text-foreground ring-primary transition-all"
           />
           <p className="mt-1 text-xs text-muted-foreground">
             This is the friendly name shown in the template list.
@@ -118,13 +119,12 @@ export function TemplateEditor({
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-foreground">
-              JSON Payload
+              Message Payload
             </label>
             <div className="flex items-center gap-2">
               <button
-                onClick={formatJson}
+                onClick={formatPayload}
                 className="cursor-pointer text-xs px-2 py-1 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground rounded transition-colors"
-                title="Format JSON (pretty print)"
               >
                 Format
               </button>
@@ -145,15 +145,21 @@ export function TemplateEditor({
             rows={14}
             spellCheck={false}
             className={`w-full px-3 py-2 bg-input border ${
-              jsonError ? "border-destructive" : "border-border"
-            } rounded-lg text-foreground font-mono text-sm resize-none focus:outline-none focus:ring-2 ${
-              jsonError ? "focus:ring-destructive" : "focus:ring-primary"
+              payloadError ? "border-destructive" : "border-border"
+            } rounded-lg text-foreground font-mono text-sm resize-none ring-primary ${
+              payloadError && "focus:ring-destructive"
             } focus:border-transparent transition-all`}
-            placeholder='{"hello":"pulsar"}'
+            placeholder="Enter payload contents"
           />
-          {!!jsonError && (
+          {!!payloadError && (
             <div className="mt-2 text-xs text-destructive">
-              JSON error: {jsonError}
+              {`${
+                payloadValidation.format === "json"
+                  ? "JSON"
+                  : payloadValidation.format === "xml"
+                  ? "XML"
+                  : "Payload"
+              } error: ${payloadError}`}
             </div>
           )}
         </div>
@@ -199,9 +205,9 @@ export function TemplateEditor({
           </button>
           <button
             onClick={handleSave}
-            disabled={!!jsonError || (!touched && !name.trim())}
+            disabled={!!payloadError || (!touched && !name.trim())}
             className={`cursor-pointer px-4 py-1.5 text-sm font-medium rounded-lg transition-colors ${
-              jsonError || (!touched && !name.trim())
+              payloadError || (!touched && !name.trim())
                 ? "bg-primary/40 text-primary-foreground/70 cursor-not-allowed"
                 : "bg-primary hover:bg-primary/90 text-primary-foreground"
             }`}

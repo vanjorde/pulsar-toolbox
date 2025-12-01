@@ -8,13 +8,13 @@ import {
 import { DashboardMainContent } from "@/components/dashboard/DashboardMainContent";
 import { DashboardOverlays } from "@/components/dashboard/DashboardOverlays";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
-import { useDashboardHotkeys } from "@/hooks/useDashboardHotkeys";
+import { useDashboardHotkeys } from "@/hooks/dashboard/useDashboardHotkeys";
 import { createDefaultTemplate } from "../../utils/templates";
-import { useDashboardState } from "@/hooks/useDashboardState";
+import { useDashboardState } from "@/hooks/dashboard/useDashboardState";
 
 export function DashboardPage() {
   const {
-    wsBase,
+    serviceUrl,
     tenant,
     setTenant,
     ns,
@@ -30,7 +30,6 @@ export function DashboardPage() {
     timeoutMs,
     setTimeoutMs,
     hosts,
-    setHosts,
     hostTrees,
     setHostTrees,
     templates,
@@ -41,7 +40,8 @@ export function DashboardPage() {
     activeHostId,
     formTarget,
     currentSendResult,
-    showAddHostModal,
+    activeModal,
+    hostModal,
     editingTemplate,
     editingScenario,
     activeTopic,
@@ -58,12 +58,21 @@ export function DashboardPage() {
     peekMessages,
     cancelPeek,
     handleAddHost,
+    handleUpdateHost,
+    handleAddLimitedTopic,
+    handleUpdateLimitedTopic,
+    handleRemoveLimitedTopic,
+    openLimitedTopicModal,
+    closeLimitedTopicModal,
+    limitedTopicModal,
+    handleDeleteHost,
     handleEditTemplate,
     handleUpdateTemplate,
     handleDeleteTemplate,
     closeTemplateEditor,
     openAddHostModal,
-    closeAddHostModal,
+    openEditHostModal,
+    closeHostModal,
     scenarios,
     openScenarioEditor,
     closeScenarioEditor,
@@ -76,6 +85,9 @@ export function DashboardPage() {
     toggleLive,
     keyboardShortcuts,
   } = useDashboardState();
+
+  const isHostModalOpen = hostModal !== null;
+  const hostBeingEdited = hostModal?.host ?? null;
 
   const headingLabel = activeTopic?.topic.fullName ?? formTarget;
   const showLivePanel = Boolean(
@@ -100,9 +112,7 @@ export function DashboardPage() {
     shortcuts: keyboardShortcuts,
   });
 
-  const hasOverlay = Boolean(
-    editingScenario || showAddHostModal || editingTemplate
-  );
+  const hasOverlay = Boolean(activeModal);
 
   const runningScenarioIds = Object.keys(scenarioRunState.running);
 
@@ -122,7 +132,6 @@ export function DashboardPage() {
         >
           <DashboardSidebar
             hosts={hosts}
-            setHosts={setHosts}
             hostTrees={hostTrees}
             setHostTrees={setHostTrees}
             onTopicClick={handleTopicClick}
@@ -131,6 +140,8 @@ export function DashboardPage() {
             activeHostId={activeHostId}
             onSelectHost={handleSelectHost}
             onAddHost={openAddHostModal}
+            onEditHost={openEditHostModal}
+            onOpenLimitedTopicModal={openLimitedTopicModal}
             scenarios={scenarios}
             selectedScenarioId={editingScenario?.id ?? null}
             onCreateScenario={handleCreateScenarioClick}
@@ -152,7 +163,7 @@ export function DashboardPage() {
           <DashboardMainContent
             hasOverlay={hasOverlay}
             headingLabel={headingLabel}
-            wsBase={wsBase}
+            serviceUrl={serviceUrl}
             liveControls={{
               activeTopic,
               connectionStatus,
@@ -207,13 +218,19 @@ export function DashboardPage() {
                 defaultNamespace={ns}
                 defaultTopic={topic}
                 defaultPayload={json}
+                activeModal={activeModal}
                 editingTemplate={editingTemplate}
                 onUpdateTemplate={handleUpdateTemplate}
                 onCloseTemplate={closeTemplateEditor}
                 onDeleteTemplate={handleDeleteTemplate}
-                showAddHostModal={showAddHostModal}
-                onCloseAddHost={closeAddHostModal}
+                onCloseHostModal={closeHostModal}
                 onAddHost={handleAddHost}
+                onUpdateHost={handleUpdateHost}
+                onDeleteHost={handleDeleteHost}
+                onCloseLimitedTopicModal={closeLimitedTopicModal}
+                onAddLimitedTopic={handleAddLimitedTopic}
+                onUpdateLimitedTopic={handleUpdateLimitedTopic}
+                onRemoveLimitedTopic={handleRemoveLimitedTopic}
               />
             }
           />

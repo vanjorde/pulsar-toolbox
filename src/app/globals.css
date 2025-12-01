@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "tailwind-animate";
+@import "tw-animate-css";
 
 :root {
   --background: oklch(1 0 0);
@@ -168,6 +168,38 @@
 }
 
 @layer base {
+  input,
+  textarea,
+  select {
+    @apply rounded-lg bg-input text-foreground border border-border
+           outline-none ring-0 shadow-none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible,
+  select:focus,
+  select:focus-visible {
+    outline: none !important;
+  }
+
+  input:focus,
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply ring-[1px] ring-primary;
+  }
+}
+
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@layer base {
   html {
     overscroll-behavior: none;
   }
@@ -198,12 +230,7 @@
 ::-webkit-scrollbar-thumb:hover {
   background: color-mix(in oklab, var(--primary) 70%, transparent);
 }
-*,
-*::before,
-*::after {
-  transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out,
-    box-shadow 0.2s ease-in-out, border-color 0.2s ease-in-out;
-}
+
 :focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -327,4 +354,24 @@
 .status-disconnected {
   background: oklch(0.5 0.1 0);
   box-shadow: 0 0 10px color-mix(in oklab, oklch(0.5 0.1 0) 20%, transparent);
+}
+
+.no-native-eye {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Edge / IE */
+.no-native-eye::-ms-reveal,
+.no-native-eye::-ms-clear {
+  display: none;
+}
+
+/* WebKit (Safari/Chromium) */
+.no-native-eye::-webkit-password-toggle,
+.no-native-eye::-webkit-caps-lock-indicator,
+.no-native-eye::-webkit-credentials-auto-fill-button {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }

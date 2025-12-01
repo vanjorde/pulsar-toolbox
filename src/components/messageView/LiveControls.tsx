@@ -63,7 +63,7 @@ export function LiveControls({
           onChange={(e) =>
             onChangeMax(Number.parseInt(e.target.value || "10", 10))
           }
-          className="w-16 px-2 py-1 bg-input border border-border rounded text-foreground text-xs focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+          className="w-16 px-2 py-1 bg-input border border-border rounded text-foreground text-xs focus:outline-none  focus:ring-primary transition-all"
           min={1}
           max={100}
         />

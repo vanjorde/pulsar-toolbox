@@ -1,7 +1,7 @@
 "use client";
 import type { Dispatch, SetStateAction } from "react";
 import { LiveMessageList } from "@/components/messageView/LiveMessageList";
-import type { PulsarMessage } from "@/lib/pulsarWs";
+import type { PulsarMessage } from "@/lib/pulsarService";
 
 export function MessageReaderPanel({
   start,
@@ -55,7 +55,7 @@ export function MessageReaderPanel({
               onChange={(event) =>
                 setStart(event.target.value as "earliest" | "latest")
               }
-              className="px-2 py-1 bg-input border border-border rounded text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              className="px-2 py-1 bg-input border border-border rounded text-foreground text-sm ring-primary transition-all"
             >
               <option value="latest">latest</option>
               <option value="earliest">earliest</option>
@@ -74,7 +74,7 @@ export function MessageReaderPanel({
                   Math.max(1, Number.parseInt(event.target.value || "1", 10))
                 )
               }
-              className="w-20 px-2 py-1 bg-input border border-border rounded text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              className="w-20 px-2 py-1 bg-input border border-border rounded text-foreground text-sm ring-primary transition-all"
             />
           </div>
           <div className="flex items-center gap-2">
@@ -91,7 +91,7 @@ export function MessageReaderPanel({
                   Math.max(100, Number.parseInt(event.target.value || "0", 10))
                 )
               }
-              className="w-24 px-2 py-1 bg-input border border-border rounded text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all"
+              className="w-24 px-2 py-1 bg-input border border-border rounded text-foreground text-sm ring-primary transition-all"
             />
           </div>
           <div className="flex items-center gap-2">

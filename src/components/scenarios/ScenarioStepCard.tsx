@@ -1,4 +1,5 @@
 "use client";
+import type { PayloadValidationResult } from "@/lib/payload";
 import type { Host } from "@/types/pulsar";
 import type {
   MessageStep,
@@ -12,7 +13,7 @@ export function ScenarioStepCard({
   isActive,
   isRunning,
   isCollapsed,
-  error,
+  payloadIssue,
   hosts,
   disableMoveUp,
   disableMoveDown,
@@ -22,10 +23,17 @@ export function ScenarioStepCard({
   onRemove,
   onUpdate,
   onChangeType,
-  onFormatJson,
+  onFormatPayload,
 }: ScenarioStepCardProps) {
   const isMessage = step.type === "message";
   const label = step.label || (isMessage ? "Message" : "Wait");
+  const errorMessage = payloadIssue?.error ?? null;
+  const errorLabel =
+    payloadIssue?.format === "json"
+      ? "JSON"
+      : payloadIssue?.format === "xml"
+      ? "XML"
+      : "Payload";
 
   return (
     <div
@@ -60,8 +68,10 @@ export function ScenarioStepCard({
             {isActive && (
               <span className="text-xs text-primary">Running...</span>
             )}
-            {error && (
-              <span className="text-xs text-destructive">JSON error</span>
+            {errorMessage && (
+              <span className="text-xs text-destructive">
+                {errorLabel} error
+              </span>
             )}
           </div>
         </button>
@@ -106,7 +116,7 @@ export function ScenarioStepCard({
                   onUpdate(step.id, { label: event.target.value })
                 }
                 disabled={isRunning}
-                className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">
@@ -117,7 +127,7 @@ export function ScenarioStepCard({
                   onChangeType(step, event.target.value as "message" | "wait")
                 }
                 disabled={isRunning}
-                className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+                className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <option value="message">Message</option>
                 <option value="wait">Wait</option>
@@ -130,9 +140,9 @@ export function ScenarioStepCard({
               step={step as MessageStep}
               hosts={hosts}
               disabled={isRunning}
-              error={error}
+              payloadIssue={payloadIssue}
               onUpdate={(updates) => onUpdate(step.id, updates)}
-              onFormatJson={onFormatJson}
+              onFormatPayload={onFormatPayload}
             />
           ) : (
             <WaitStepFields
@@ -151,17 +161,24 @@ function MessageStepFields({
   step,
   hosts,
   disabled,
-  error,
+  payloadIssue,
   onUpdate,
-  onFormatJson,
+  onFormatPayload,
 }: {
   step: MessageStep;
   hosts: Host[];
   disabled: boolean;
-  error?: string;
+  payloadIssue?: PayloadValidationResult;
   onUpdate: (updates: Partial<MessageStep>) => void;
-  onFormatJson?: (step: MessageStep) => void;
+  onFormatPayload?: (step: MessageStep) => void;
 }) {
+  const errorMessage = payloadIssue?.error ?? null;
+  const errorLabel =
+    payloadIssue?.format === "json"
+      ? "JSON"
+      : payloadIssue?.format === "xml"
+      ? "XML"
+      : "Payload";
   return (
     <div className="mt-4 space-y-4">
       <div className="grid gap-3 md:grid-cols-2">
@@ -173,7 +190,7 @@ function MessageStepFields({
               onUpdate({ hostId: event.target.value || null })
             }
             disabled={disabled}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           >
             <option value="">Use active host</option>
             {hosts.map((host) => (
@@ -190,7 +207,7 @@ function MessageStepFields({
             value={step.tenant}
             onChange={(event) => onUpdate({ tenant: event.target.value })}
             disabled={disabled}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       </div>
@@ -203,7 +220,7 @@ function MessageStepFields({
             value={step.ns}
             onChange={(event) => onUpdate({ ns: event.target.value })}
             disabled={disabled}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -213,18 +230,18 @@ function MessageStepFields({
             value={step.topic}
             onChange={(event) => onUpdate({ topic: event.target.value })}
             disabled={disabled}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       </div>
 
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">JSON payload</span>
-          {onFormatJson && (
+          <span className="text-sm text-muted-foreground">Message payload</span>
+          {onFormatPayload && (
             <button
               type="button"
-              onClick={() => onFormatJson(step)}
+              onClick={() => onFormatPayload(step)}
               disabled={disabled}
               className="cursor-pointer rounded bg-muted px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
@@ -238,16 +255,16 @@ function MessageStepFields({
           rows={12}
           spellCheck={false}
           disabled={disabled}
-          className={`w-full resize-none rounded-lg border bg-input px-3 py-2 font-mono text-sm text-foreground focus:border-transparent focus:outline-none focus:ring-2 ${
-            error
+          className={`w-full resize-none rounded-lg border bg-input px-3 py-2 font-mono text-sm text-foreground focus:border-transparent focus:outline-none  ${
+            errorMessage
               ? "border-destructive focus:ring-destructive"
               : "border-border focus:ring-primary"
           } disabled:cursor-not-allowed disabled:opacity-60`}
-          placeholder='{"hello":"pulsar"}'
+          placeholder="Enter payload contents"
         />
-        {error && (
+        {errorMessage && (
           <div className="mt-2 text-xs text-destructive">
-            JSON error: {error}
+            {errorLabel} error: {errorMessage}
           </div>
         )}
       </div>
@@ -265,7 +282,7 @@ function MessageStepFields({
               })
             }
             disabled={disabled}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       </div>
@@ -294,7 +311,7 @@ function WaitStepFields({
             onUpdate({ waitMs: Math.max(0, Number(event.target.value) || 0) })
           }
           disabled={disabled}
-          className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
         />
       </label>
     </div>

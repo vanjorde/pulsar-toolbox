@@ -1,4 +1,4 @@
-﻿import { PulsarMessage } from "@/lib/pulsarWs";
+﻿import { PulsarMessage } from "@/lib/pulsarService";
 
 export type SendResult = {
   target: string;

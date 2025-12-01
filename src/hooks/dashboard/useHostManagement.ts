@@ -1,39 +1,72 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
-import { useLocalStorage } from "@/hooks/useLocalStorage";
-import { safeClone } from "@/lib/safeClone";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  HOSTS_STORAGE_KEY,
+  addAllowedTopic as addAllowedTopicToHost,
+  ensureTopicVisibleInTree,
+  initHostTreeMap,
+  loadHostsFromStorage,
+  normalizeHost,
+  persistHostsToStorage,
+  removeAllowedTopic as removeAllowedTopicFromHost,
+  updateAllowedTopic as updateAllowedTopicOnHost,
+} from "@/lib/hosts";
+import { deleteAllHostTokens } from "@/lib/pulsarTokenStorage";
 import { DEFAULT_HOSTS } from "@/lib/defaults";
 import type { Host, HostTree, TopicNode } from "@/types/pulsar";
 
-function initHostTrees(hosts: Host[]): Record<string, HostTree> {
-  return hosts.reduce<Record<string, HostTree>>((acc, host) => {
-    acc[host.id] = { loading: false, tenants: [] };
-    return acc;
-  }, {});
-}
-
-function cloneHostTrees(
-  value: Record<string, HostTree>
-): Record<string, HostTree> {
-  return safeClone(value);
-}
-
 export function useHostManagement() {
-  const [hosts, setHosts] = useLocalStorage<Host[]>(
-    "pulsar.hosts",
-    DEFAULT_HOSTS
+  const [hosts, setHostsState] = useState<Host[]>(() =>
+    DEFAULT_HOSTS.map((host) => normalizeHost(host))
+  );
+  const [isInitialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const loaded = await loadHostsFromStorage(DEFAULT_HOSTS, HOSTS_STORAGE_KEY);
+      if (cancelled) return;
+      setHostsState(loaded);
+      await persistHostsToStorage(loaded, HOSTS_STORAGE_KEY);
+      if (!cancelled) {
+        setInitialized(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const setHosts = useCallback(
+    (update: React.SetStateAction<Host[]>) => {
+      setHostsState((prev) => {
+        const normalizedPrev = prev.map((host) => normalizeHost(host));
+        const nextValue =
+          typeof update === "function"
+            ? (update as (prev: Host[]) => Host[])(normalizedPrev)
+            : update;
+        const normalizedNext = nextValue.map((host) => normalizeHost(host));
+        void persistHostsToStorage(normalizedNext, HOSTS_STORAGE_KEY);
+        return normalizedNext;
+      });
+    },
+    []
   );
 
-  const [wsBase, setWsBase] = useState<string>(
-    () => hosts[0]?.wsBase ?? DEFAULT_HOSTS[0]?.wsBase ?? "ws://localhost:8080"
+  const serviceUrl = useMemo(
+    () => hosts[0]?.serviceUrl ?? DEFAULT_HOSTS[0]?.serviceUrl ?? "pulsar://localhost:6650",
+    [hosts]
   );
+  const [serviceUrlState, setServiceUrl] = useState<string>(serviceUrl);
+
+  useEffect(() => {
+    setServiceUrl((current) => (current === serviceUrl ? current : serviceUrl));
+  }, [serviceUrl]);
 
   const [hostTrees, setHostTrees] = useState<Record<string, HostTree>>(() =>
-    initHostTrees(hosts)
+    initHostTreeMap(hosts)
   );
-  const [activeHostId, setActiveHostId] = useState<string | null>(
-    () => hosts[0]?.id ?? null
-  );
+  const [activeHostId, setActiveHostId] = useState<string | null>(() => hosts[0]?.id ?? null);
 
   useEffect(() => {
     setHostTrees((prev) => {
@@ -44,7 +77,7 @@ export function useHostManagement() {
         }
       }
       for (const key of Object.keys(next)) {
-        if (!hosts.find((host) => host.id === key)) {
+        if (!hosts.some((host) => host.id === key)) {
           delete next[key];
         }
       }
@@ -54,10 +87,13 @@ export function useHostManagement() {
 
   const handleSelectHost = useCallback((host: Host) => {
     setActiveHostId((current) => (current === host.id ? current : host.id));
-    setWsBase((current) => (current === host.wsBase ? current : host.wsBase));
+    setServiceUrl((current) => (current === host.serviceUrl ? current : host.serviceUrl));
   }, []);
 
   useEffect(() => {
+    if (!isInitialized) {
+      return;
+    }
     if (hosts.length === 0) {
       setActiveHostId(null);
       return;
@@ -69,94 +105,132 @@ export function useHostManagement() {
     if (!hosts.some((host) => host.id === activeHostId)) {
       handleSelectHost(hosts[0]);
     }
-  }, [hosts, activeHostId, handleSelectHost]);
+  }, [hosts, activeHostId, handleSelectHost, isInitialized]);
 
   const ensureTopicVisible = useCallback(
     (host: Host, topicNode: TopicNode) => {
-      setHostTrees((prev) => {
-        const existingTree = prev[host.id];
-        const existingTenant = existingTree?.tenants.find(
-          (t) => t.name === topicNode.tenant
-        );
-        const existingNamespace = existingTenant?.namespaces.find(
-          (n) => n.ns === topicNode.ns
-        );
-        const existingTopic = existingNamespace?.topics.some(
-          (t) => t.fullName === topicNode.fullName
-        );
+      setHostTrees((prev) => ensureTopicVisibleInTree(prev, host, topicNode));
+    },
+    []
+  );
 
-        if (
-          existingTopic &&
-          (existingTenant?.expanded ?? false) &&
-          (existingNamespace?.expanded ?? false)
-        ) {
-          return prev;
-        }
+  const addHost = useCallback(
+    (host: Host) => {
+      setHosts((prev) => [...prev, host]);
+    },
+    [setHosts]
+  );
 
-        const next = cloneHostTrees(prev);
-        const tree =
-          next[host.id] ??
-          (next[host.id] = {
-            loading: false,
-            tenants: [],
-          });
-
-        let tenantNode = tree.tenants.find((t) => t.name === topicNode.tenant);
-        if (!tenantNode) {
-          tenantNode = {
-            name: topicNode.tenant,
-            expanded: true,
-            loading: false,
-            error: null,
-            namespaces: [],
-          };
-          tree.tenants.push(tenantNode);
-        } else {
-          tenantNode.expanded = true;
-        }
-
-        let namespace = tenantNode.namespaces.find(
-          (n) => n.ns === topicNode.ns
-        );
-        if (!namespace) {
-          namespace = {
-            name: `${topicNode.tenant}/${topicNode.ns}`,
-            tenant: topicNode.tenant,
-            ns: topicNode.ns,
-            expanded: true,
-            loading: false,
-            error: null,
-            topics: [],
-          };
-          tenantNode.namespaces.push(namespace);
-        } else {
-          namespace.expanded = true;
-        }
-
-        if (!namespace.topics.some((t) => t.fullName === topicNode.fullName)) {
-          namespace.topics.push(topicNode);
-          namespace.topics.sort((a, b) => a.fullName.localeCompare(b.fullName));
-        }
-
-        tenantNode.namespaces.sort((a, b) => a.name.localeCompare(b.name));
-        tree.tenants.sort((a, b) => a.name.localeCompare(b.name));
-
-        return next;
+  const updateHost = useCallback(
+    (host: Host) => {
+      setHosts((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          if (item.id !== host.id) {
+            return item;
+          }
+          changed = true;
+          return host;
+        });
+        return changed ? next : prev;
       });
     },
-    [setHostTrees]
+    [setHosts]
+  );
+
+  const deleteHost = useCallback(
+    (hostId: string) => {
+      void deleteAllHostTokens(hostId);
+      setHosts((prev) => {
+        const next = prev.filter((host) => host.id !== hostId);
+        return next.length === prev.length ? prev : next;
+      });
+    },
+    [setHosts]
+  );
+
+  const addLimitedTopic = useCallback(
+    (hostId: string, topic: string) => {
+      if (!topic) {
+        return;
+      }
+      setHosts((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          if (item.id !== hostId) {
+            return item;
+          }
+          const updated = addAllowedTopicToHost(item, topic);
+          if (updated !== item) {
+            changed = true;
+          }
+          return updated;
+        });
+        return changed ? next : prev;
+      });
+    },
+    [setHosts]
+  );
+
+  const removeLimitedTopic = useCallback(
+    (hostId: string, topic: string) => {
+      setHosts((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          if (item.id !== hostId) {
+            return item;
+          }
+          const updated = removeAllowedTopicFromHost(item, topic);
+          if (updated !== item) {
+            changed = true;
+          }
+          return updated;
+        });
+        return changed ? next : prev;
+      });
+    },
+    [setHosts]
+  );
+
+  const updateLimitedTopic = useCallback(
+    (hostId: string, previousTopic: string, nextTopic: string) => {
+      if (!nextTopic) {
+        return;
+      }
+      setHosts((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          if (item.id !== hostId) {
+            return item;
+          }
+          const updated = updateAllowedTopicOnHost(item, previousTopic, nextTopic);
+          if (updated !== item) {
+            changed = true;
+          }
+          return updated;
+        });
+        return changed ? next : prev;
+      });
+    },
+    [setHosts]
   );
 
   return {
     hosts,
     setHosts,
-    wsBase,
-    setWsBase,
+    serviceUrl: serviceUrlState,
+    setServiceUrl,
     hostTrees,
     setHostTrees,
     activeHostId,
     setActiveHostId,
     handleSelectHost,
     ensureTopicVisible,
+    addHost,
+    updateHost,
+    deleteHost,
+    addLimitedTopic,
+    removeLimitedTopic,
+    updateLimitedTopic,
   } as const;
 }
