@@ -12,7 +12,6 @@ import { SidebarActionButton } from "./SidebarActionButton";
 
 interface DashboardSidebarProps {
   hosts: Host[];
-  setHosts: Dispatch<SetStateAction<Host[]>>;
   hostTrees: Record<string, HostTree>;
   setHostTrees: Dispatch<SetStateAction<Record<string, HostTree>>>;
   onTopicClick: (host: Host, topic: TopicNode) => void;
@@ -25,6 +24,11 @@ interface DashboardSidebarProps {
   activeHostId: string | null;
   onSelectHost: (host: Host) => void;
   onAddHost: () => void;
+  onEditHost: (host: Host) => void;
+  onOpenLimitedTopicModal: (
+    host: Host,
+    action: { type: "create" } | { type: "edit"; topic: string }
+  ) => void;
   scenarios: Scenario[];
   selectedScenarioId: string | null;
   onCreateScenario: () => void;
@@ -41,7 +45,6 @@ interface DashboardSidebarProps {
 
 export function DashboardSidebar({
   hosts,
-  setHosts,
   hostTrees,
   setHostTrees,
   onTopicClick,
@@ -50,6 +53,8 @@ export function DashboardSidebar({
   activeHostId,
   onSelectHost,
   onAddHost,
+  onEditHost,
+  onOpenLimitedTopicModal,
   scenarios,
   selectedScenarioId,
   onCreateScenario,
@@ -83,7 +88,6 @@ export function DashboardSidebar({
         <div className="h-full overflow-auto pr-1">
           <HostsExplorer
             hosts={hosts}
-            setHosts={setHosts}
             hostTrees={hostTrees}
             setHostTrees={setHostTrees}
             onTopicClick={onTopicClick}
@@ -91,7 +95,8 @@ export function DashboardSidebar({
             activeTopic={activeTopic ?? undefined}
             activeHostId={activeHostId ?? undefined}
             onSelectHost={onSelectHost}
-            onAddHost={onAddHost}
+            onEditHost={onEditHost}
+            onOpenLimitedTopicModal={onOpenLimitedTopicModal}
           />
         </div>
       </SidebarSection>

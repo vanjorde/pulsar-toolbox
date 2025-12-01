@@ -2,7 +2,13 @@ export type Host = {
   id: string;
   name: string;
   adminBase: string;
-  wsBase: string;
+  serviceUrl: string;
+  adminCaPem?: string | null;
+  token?: string | null;
+  adminToken?: string | null;
+  useSeparateAdminToken?: boolean;
+  isAdmin: boolean;
+  allowedTopics: string[];
 };
 
 export type TopicNode = {

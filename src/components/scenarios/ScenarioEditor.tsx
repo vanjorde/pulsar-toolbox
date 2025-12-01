@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ScenarioStepCard } from "@/components/scenarios/ScenarioStepCard";
-import { formatJsonString } from "@/lib/json";
+import { formatPayloadString } from "@/lib/payload";
+import type { PayloadValidationResult } from "@/lib/payload";
 import { createScenarioStep } from "@/lib/scenario";
 import {
-  computeScenarioJsonErrors,
+  computeScenarioPayloadIssues,
   convertScenarioStepType,
 } from "@/lib/scenarioEditor";
 import { safeClone } from "@/lib/safeClone";
@@ -34,7 +35,9 @@ export function ScenarioEditor({
   const [draft, setDraft] = useState<Scenario | null>(
     scenarioProp ? safeClone(scenarioProp) : null
   );
-  const [jsonErrors, setJsonErrors] = useState<Record<string, string>>({});
+  const [payloadIssues, setPayloadIssues] = useState<
+    Record<string, PayloadValidationResult>
+  >({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const scenario = draft;
@@ -42,13 +45,13 @@ export function ScenarioEditor({
   useEffect(() => {
     if (!scenarioProp) {
       setDraft(null);
-      setJsonErrors({});
+      setPayloadIssues({});
       setCollapsed({});
       return;
     }
     const copy = safeClone(scenarioProp);
     setDraft(copy);
-    setJsonErrors(computeScenarioJsonErrors(copy.steps));
+    setPayloadIssues(computeScenarioPayloadIssues(copy.steps));
     setCollapsed((prev) => {
       const map: Record<string, boolean> = {};
       for (const step of copy.steps) {
@@ -69,7 +72,7 @@ export function ScenarioEditor({
     return JSON.stringify(scenario) !== JSON.stringify(scenarioProp);
   }, [scenario, scenarioProp]);
 
-  const hasErrors = Object.keys(jsonErrors).length > 0;
+  const hasErrors = Object.keys(payloadIssues).length > 0;
   const canSave = Boolean(scenario) && isDirty && !hasErrors && !isRunning;
   const runDisabled =
     !scenario || scenario.steps.length === 0 || isDirty || hasErrors;
@@ -79,7 +82,7 @@ export function ScenarioEditor({
       setDraft((prev) => {
         if (!prev) return prev;
         const next = updater(safeClone(prev));
-        setJsonErrors(computeScenarioJsonErrors(next.steps));
+        setPayloadIssues(computeScenarioPayloadIssues(next.steps));
         setCollapsed((prevCollapsed) => {
           const map: Record<string, boolean> = {};
           for (const step of next.steps) {
@@ -252,7 +255,7 @@ export function ScenarioEditor({
     if (scenarioProp) {
       const reset = safeClone(scenarioProp);
       setDraft(reset);
-      setJsonErrors(computeScenarioJsonErrors(reset.steps));
+      setPayloadIssues(computeScenarioPayloadIssues(reset.steps));
       setCollapsed((prev) => {
         const map: Record<string, boolean> = {};
         for (const step of reset.steps) {
@@ -262,7 +265,7 @@ export function ScenarioEditor({
       });
     } else {
       setDraft(null);
-      setJsonErrors({});
+      setPayloadIssues({});
       setCollapsed({});
     }
     onCancel();
@@ -278,16 +281,14 @@ export function ScenarioEditor({
     onRun(scenario.id);
   }, [scenario, onRun]);
 
-  const handleFormatJson = useCallback(
+  const handleFormatPayload = useCallback(
     (step: MessageStep) => {
       if (!scenario) return;
-      try {
-        const result = formatJsonString(step.payload, 2);
-        if (!result.ok) {
-          return;
-        }
-        updateScenarioStep(scenario.id, step.id, { payload: result.value });
-      } catch {}
+      const result = formatPayloadString(step.payload, 2);
+      if (!result.ok) {
+        return;
+      }
+      updateScenarioStep(scenario.id, step.id, { payload: result.value });
     },
     [scenario, updateScenarioStep]
   );
@@ -305,7 +306,7 @@ export function ScenarioEditor({
     : isDirty
     ? "Save changes before running"
     : hasErrors
-    ? "Fix JSON errors before running"
+    ? "Fix payload errors before running"
     : undefined;
 
   return (
@@ -380,7 +381,7 @@ export function ScenarioEditor({
               updateScenarioMeta(scenario.id, { name: e.target.value })
             }
             disabled={isRunning}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm">
@@ -392,7 +393,7 @@ export function ScenarioEditor({
               updateScenarioMeta(scenario.id, { description: e.target.value })
             }
             disabled={isRunning}
-            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary/60 disabled:cursor-not-allowed disabled:opacity-60"
+            className="rounded-md border border-border bg-background/90 px-3 py-2 text-sm text-foreground focus:outline-none ring-primary transition-all disabled:cursor-not-allowed disabled:opacity-60"
           />
         </label>
       </div>
@@ -445,7 +446,7 @@ export function ScenarioEditor({
           {scenario.steps.map((step, index) => {
             const isActiveStep = isRunning && runningStepIndex === index;
             const isCollapsed = collapsed[step.id] === true;
-            const error = jsonErrors[step.id];
+            const issue = payloadIssues[step.id];
 
             return (
               <ScenarioStepCard
@@ -455,7 +456,7 @@ export function ScenarioEditor({
                 isActive={isActiveStep}
                 isRunning={isRunning}
                 isCollapsed={isCollapsed}
-                error={error}
+                payloadIssue={issue}
                 hosts={hosts}
                 disableMoveUp={index === 0}
                 disableMoveDown={index === scenario.steps.length - 1}
@@ -477,7 +478,7 @@ export function ScenarioEditor({
                     position: index + 1,
                   })
                 }
-                onFormatJson={handleFormatJson}
+                onFormatPayload={handleFormatPayload}
               />
             );
           })}

@@ -1,14 +1,30 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import clsx from "clsx";
 import { makeMessageKey } from "@/lib/messages";
+import { formatPayloadForDisplayWithFormat } from "@/lib/payload";
 import { getPublishMs } from "@/lib/time";
-import type { PulsarMessage } from "@/lib/pulsarWs";
+import type { PulsarMessage } from "@/lib/pulsarService";
 import type { MessageEntry } from "@/types/messaging";
 import { useExpiringSet } from "@/hooks/useExpiringSet";
+import { FiClipboard } from "react-icons/fi";
+import { PayloadFormat } from "@/types/payload";
 
 const APPEAR_MS = 600;
 const SHIFT_MS = 450;
+
+const formatBadgeClasses: Record<PayloadFormat, string> = {
+  json: "border-sky-500/45 bg-sky-500/15 text-sky-300",
+  xml: "border-purple-500/45 bg-purple-500/15 text-purple-300",
+  text: "border-slate-500/40 bg-slate-500/15 text-slate-300",
+};
+
+const formatBadgeLabels: Record<PayloadFormat, string> = {
+  json: "JSON",
+  xml: "XML",
+  text: "Text",
+};
 
 export function LiveMessageList({
   messages,
@@ -58,6 +74,35 @@ export function LiveMessageList({
     add: addAppearKeys,
     clear: clearAppearKeys,
   } = useExpiringSet(APPEAR_MS);
+
+  const copyMessage = useCallback(async (text: string) => {
+    try {
+      if (
+        typeof navigator !== "undefined" &&
+        navigator.clipboard &&
+        typeof navigator.clipboard.writeText === "function"
+      ) {
+        await navigator.clipboard.writeText(text);
+      } else if (typeof document !== "undefined") {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.setAttribute("readonly", "");
+        textarea.style.position = "absolute";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      } else {
+        throw new Error("Clipboard API is not available");
+      }
+
+      toast.success("Message copied to clipboard");
+    } catch (error) {
+      console.error("Failed to copy message", error);
+      toast.error("Unable to copy message");
+    }
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -124,42 +169,88 @@ export function LiveMessageList({
           ? new Date(timestampMs).toLocaleString()
           : "-";
 
-        let messageIdLabel: string;
-        const rawId = (message as any)?.messageId;
-        if (rawId == null || rawId === "") {
-          messageIdLabel = "(no id)";
-        } else if (typeof rawId === "object") {
-          try {
-            messageIdLabel = JSON.stringify(rawId);
-          } catch {
-            messageIdLabel = "(complex id)";
-          }
-        } else {
-          messageIdLabel = String(rawId);
-        }
+        const fmt = (v: unknown) =>
+          v === null || typeof v === "undefined" || v === "" ? "-" : String(v);
+
+        const id = (message as any)?.messageIdData as
+          | {
+              ledgerId?: number | string;
+              entryId?: number | string;
+              partition?: number;
+              batchIndex?: number;
+            }
+          | undefined;
+
+        const rawMessageId = (message as any)?.messageId;
+        const base64Id = typeof rawMessageId === "string" ? rawMessageId : null;
+
+        const hasParts =
+          !!id &&
+          (id.ledgerId !== undefined ||
+            id.entryId !== undefined ||
+            id.partition !== undefined ||
+            id.batchIndex !== undefined);
+
+        const bracket = hasParts
+          ? `[ledgerId: ${fmt(id?.ledgerId)}, entryId: ${fmt(
+              id?.entryId
+            )}, partition: ${fmt(id?.partition)}, batchIndex: ${fmt(
+              id?.batchIndex
+            )}]`
+          : "";
 
         const isNew = appearKeys.has(instanceKey);
+        const payloadSource =
+          (message as any)?.decoded ?? (message as any)?.payload ?? message;
+        const { formatted: formattedPayload, format: payloadFormat } =
+          formatPayloadForDisplayWithFormat(payloadSource, 2);
 
         return (
           <article
             key={instanceKey}
             data-new={isNew ? "true" : undefined}
             className={clsx(
-              "live-message-card p-4 bg-muted/50 border border-border rounded-lg transition-colors",
-              "hover:bg-muted/70 focus-within:ring-2 focus-within:ring-primary/35",
+              "group live-message-card p-4 bg-muted/50 border border-border rounded-lg transition-colors",
+              "hover:bg-muted/70",
               isNew && "live-message-card--enter"
             )}
           >
-            <div className="text-xs text-muted-foreground mb-2 flex items-center justify-between gap-3">
-              <span className="flex-1 min-w-0">
-                <strong className="font-semibold text-foreground">
-                  MessageId:
-                </strong>{" "}
-                <span className="break-all text-foreground/90">
-                  {messageIdLabel}
+            <div className="text-xs text-muted-foreground mb-2 flex items-start justify-between gap-3">
+              <div className="flex flex-1 min-w-0 items-start gap-2">
+                <span className="flex-1 min-w-0">
+                  <strong className="font-semibold text-foreground">
+                    MessageId:
+                  </strong>{" "}
+                  <span className="break-all">
+                    {base64Id ? (
+                      <>
+                        <span className="text-foreground/90">{base64Id}</span>
+                        {bracket && (
+                          <>
+                            {" "}
+                            <span className="text-muted-foreground">
+                              {bracket}
+                            </span>
+                          </>
+                        )}
+                      </>
+                    ) : bracket ? (
+                      <span className="text-muted-foreground">{bracket}</span>
+                    ) : (
+                      "(no id)"
+                    )}
+                  </span>
                 </span>
-              </span>
+              </div>
               <div className="flex items-center gap-2 whitespace-nowrap">
+                <span
+                  className={clsx(
+                    "inline-flex items-center rounded-sm border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    formatBadgeClasses[payloadFormat]
+                  )}
+                >
+                  {formatBadgeLabels[payloadFormat]}
+                </span>
                 {isLive && (
                   <span className="text-green-500 flex items-center gap-1 text-[11px] font-medium">
                     <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -171,9 +262,18 @@ export function LiveMessageList({
                 </span>
               </div>
             </div>
-            <pre className="text-sm bg-input border border-border rounded-md px-3 py-3 overflow-x-auto text-foreground">
-              {JSON.stringify((message as any)?.decoded ?? message, null, 2)}
-            </pre>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => copyMessage(formattedPayload ?? "")}
+                className="absolute group/copy opacity-0 group-hover:opacity-100 duration-500 inline-flex cursor-pointer right-2 top-2  items-center gap-1 rounded-md text-[11px] font-medium text-foreground hover:text-white shadow-sm transition-all"
+              >
+                <FiClipboard className="h-4 w-4 text-neutral-400 group-hover/copy:text-white transition-all" />
+              </button>
+              <pre className="text-sm bg-input border border-border rounded-md px-3 py-3 pr-12 overflow-x-auto text-foreground">
+                {formattedPayload}
+              </pre>
+            </div>
           </article>
         );
       })}

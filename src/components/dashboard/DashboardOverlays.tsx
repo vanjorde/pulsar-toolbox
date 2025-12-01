@@ -1,11 +1,13 @@
 "use client";
 import { useCallback, useState } from "react";
 import { AddHostModal } from "@/components/hosts/AddHostModal";
+import { LimitedTopicModal } from "@/components/hosts/LimitedTopicModal";
 import { ScenarioEditor } from "@/components/scenarios/ScenarioEditor";
 import { TemplateEditor } from "@/components/templates/TemplateEditor";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import type { Host, Template } from "@/types/pulsar";
 import type { Scenario } from "@/types/scenario";
+import type { DashboardModal } from "@/hooks/dashboard/useDashboardState";
 import { PanelOverlay } from "./PanelOverlay";
 
 interface ScenarioRunState {
@@ -26,13 +28,23 @@ interface DashboardOverlaysProps {
   defaultNamespace: string;
   defaultTopic: string;
   defaultPayload: string;
+  activeModal: DashboardModal | null;
   editingTemplate: Template | null;
   onUpdateTemplate: (template: Template) => void;
   onCloseTemplate: () => void;
   onDeleteTemplate: (templateId: string) => void;
-  showAddHostModal: boolean;
-  onCloseAddHost: () => void;
+  onCloseHostModal: () => void;
   onAddHost: (host: Host) => void;
+  onUpdateHost: (host: Host) => void;
+  onDeleteHost: (hostId: string) => void;
+  onCloseLimitedTopicModal: () => void;
+  onAddLimitedTopic: (host: Host, topic: string) => void;
+  onUpdateLimitedTopic: (
+    host: Host,
+    previousTopic: string,
+    nextTopic: string
+  ) => void;
+  onRemoveLimitedTopic: (host: Host, topic: string) => void;
 }
 
 export function DashboardOverlays({
@@ -49,13 +61,19 @@ export function DashboardOverlays({
   defaultNamespace,
   defaultTopic,
   defaultPayload,
+  activeModal,
   editingTemplate,
   onUpdateTemplate,
   onCloseTemplate,
   onDeleteTemplate,
-  showAddHostModal,
-  onCloseAddHost,
+  onCloseHostModal,
   onAddHost,
+  onUpdateHost,
+  onDeleteHost,
+  onCloseLimitedTopicModal,
+  onAddLimitedTopic,
+  onUpdateLimitedTopic,
+  onRemoveLimitedTopic,
 }: DashboardOverlaysProps) {
   const [scenarioPendingDelete, setScenarioPendingDelete] =
     useState<Scenario | null>(null);
@@ -83,11 +101,28 @@ export function DashboardOverlays({
 
   const handleScenarioCancel = () => {};
 
+  const hostModal = activeModal?.kind === "host" ? activeModal : null;
+  const limitedTopicModal =
+    activeModal?.kind === "limitedTopic" ? activeModal : null;
+  const templateModalOpen = activeModal?.kind === "template" && editingTemplate;
+  const scenarioModalOpen = activeModal?.kind === "scenario" && editingScenario;
+
+  const hostBeingEdited = hostModal?.host ?? null;
+
+  const activeLimitedModalHost = limitedTopicModal
+    ? hosts.find((item) => item.id === limitedTopicModal.hostId) ?? null
+    : null;
+  const limitedTopicModeType = limitedTopicModal?.mode.type ?? null;
+  const limitedTopicEditTopic =
+    limitedTopicModal && limitedTopicModal.mode.type === "edit"
+      ? limitedTopicModal.mode.topic
+      : null;
+
   return (
     <>
-      {editingScenario && (
+      {scenarioModalOpen && editingScenario && (
         <PanelOverlay>
-          <div className="bg-card border border-border rounded-2xl shadow-2xl w-[min(1080px,calc(100%-48px))] max-h-[97%] overflow-hidden flex flex-col">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-[min(1080px,calc(100%-48px))] max-h-[97%] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-border flex items-center justify-between">
               <h3 className="text-lg font-semibold text-foreground">
                 {editingScenario.name || "Edit Scenario"}
@@ -140,9 +175,9 @@ export function DashboardOverlays({
         }"? This action cannot be undone.`}
       />
 
-      {editingTemplate && (
+      {templateModalOpen && (
         <PanelOverlay>
-          <div className="bg-card border border-border rounded-2xl shadow-2xl w-[min(980px,calc(100%-48px))] max-h-[90%] overflow-hidden flex flex-col">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl w-[min(980px,calc(100%-48px))] max-h-[90%] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
             <TemplateEditor
               template={editingTemplate}
               onUpdate={onUpdateTemplate}
@@ -153,12 +188,52 @@ export function DashboardOverlays({
         </PanelOverlay>
       )}
 
-      {showAddHostModal && (
+      {hostModal && (
         <PanelOverlay>
           <AddHostModal
-            isOpen={showAddHostModal}
-            onClose={onCloseAddHost}
+            isOpen
+            host={hostBeingEdited ?? undefined}
+            onClose={onCloseHostModal}
             onAdd={onAddHost}
+            onUpdate={onUpdateHost}
+            onDelete={onDeleteHost}
+          />
+        </PanelOverlay>
+      )}
+
+      {limitedTopicModal && activeLimitedModalHost && (
+        <PanelOverlay>
+          <LimitedTopicModal
+            isOpen
+            host={activeLimitedModalHost}
+            existingTopics={activeLimitedModalHost.allowedTopics}
+            mode={
+              limitedTopicModeType === "create"
+                ? {
+                    type: "create" as const,
+                    onSubmit: (topic: string) => {
+                      onAddLimitedTopic(activeLimitedModalHost, topic);
+                    },
+                  }
+                : {
+                    type: "edit" as const,
+                    initialTopic: limitedTopicEditTopic!,
+                    onSubmit: (topic: string) => {
+                      onUpdateLimitedTopic(
+                        activeLimitedModalHost,
+                        limitedTopicEditTopic!,
+                        topic
+                      );
+                    },
+                    onDelete: () => {
+                      onRemoveLimitedTopic(
+                        activeLimitedModalHost,
+                        limitedTopicEditTopic!
+                      );
+                    },
+                  }
+            }
+            onClose={onCloseLimitedTopicModal}
           />
         </PanelOverlay>
       )}

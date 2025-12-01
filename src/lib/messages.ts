@@ -1,4 +1,4 @@
-import type { PulsarMessage } from "@/lib/pulsarWs";
+import type { PulsarMessage } from "@/lib/pulsarService";
 import { getPublishMs } from "@/lib/time";
 import { MessageLike } from "@/types/messaging";
 

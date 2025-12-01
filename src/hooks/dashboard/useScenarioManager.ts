@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useLocalStorage } from "@/hooks/useLocalStorage";
 import { createScenarioStep } from "@/lib/scenario";
-import { produce } from "@/lib/pulsarWs";
+import { produce } from "@/lib/pulsarService";
 import { uid } from "@/lib/uid";
 import type { ActiveTopic } from "@/hooks/useLiveTopic";
 import type { Host } from "@/types/pulsar";
@@ -323,11 +323,13 @@ export function useScenarioManager({
 
         try {
           await produce({
-            wsBase: host.wsBase,
+            serviceUrl: host.serviceUrl,
             tenant: step.tenant,
             ns: step.ns,
             topic: step.topic,
             json: step.payload,
+            caPem: host.adminCaPem ?? undefined,
+            token: host.token ?? undefined,
           });
           const isActiveTarget =
             activeTopic &&

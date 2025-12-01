@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { AsyncPoller } from "@/lib/asyncPoller";
 import { mergeUniqueNewestFirst, sortNewestFirst } from "@/lib/messages";
-import { readN, type PulsarMessage } from "@/lib/pulsarWs";
+import { readN, type PulsarMessage } from "@/lib/pulsarService";
 import type { Host, TopicNode } from "@/types/pulsar";
 
 export type ActiveTopic = { host: Host; topic: TopicNode } | null;
@@ -49,7 +50,7 @@ export function useLiveTopic(initialMax = 10) {
       historyAbortRef.current = abortHandle;
       try {
         const initial = await readN({
-          wsBase: host.wsBase,
+          serviceUrl: host.serviceUrl,
           tenant: tp.tenant,
           ns: tp.ns,
           topic: tp.topic,
@@ -57,6 +58,8 @@ export function useLiveTopic(initialMax = 10) {
           limit: Math.max(targetMax * HISTORY_SCAN_FACTOR, targetMax),
           timeoutMs: HISTORY_TIMEOUT_MS,
           abortRef,
+          caPem: host.adminCaPem ?? undefined,
+          token: host.token ?? undefined,
         });
         return sortNewestFirst(initial).slice(0, targetMax);
       } finally {
@@ -77,7 +80,7 @@ export function useLiveTopic(initialMax = 10) {
       pollAbortRef.current = abortHandle;
       try {
         return await readN({
-          wsBase: topicInfo.host.wsBase,
+          serviceUrl: topicInfo.host.serviceUrl,
           tenant: topicInfo.topic.tenant,
           ns: topicInfo.topic.ns,
           topic: topicInfo.topic.topic,
@@ -85,6 +88,8 @@ export function useLiveTopic(initialMax = 10) {
           limit,
           timeoutMs: POLL_TIMEOUT_MS,
           abortRef,
+          caPem: topicInfo.host.adminCaPem ?? undefined,
+          token: topicInfo.host.token ?? undefined,
         });
       } finally {
         if (pollAbortRef.current === abortHandle) {
@@ -181,9 +186,19 @@ export function useLiveTopic(initialMax = 10) {
         setLiveMessages((prev) =>
           mergeUniqueNewestFirst(prev, tail, maxMessages)
         );
-      } catch {
+      } catch (error) {
         setLiveMessages([]);
         setConnectionStatus("disconnected");
+        const rawMessage =
+          error instanceof Error
+            ? error.message
+            : typeof error === "string"
+            ? error
+            : "Unknown error.";
+        const summary = rawMessage.split(" | caused by: ")[0]?.trim() || rawMessage;
+        toast.error(
+          `Failed to open ${topicNode.fullName} on ${host.name}. ${summary}`
+        );
       } finally {
         setIsLoading(false);
       }

@@ -1,5 +1,6 @@
 "use client";
-import type { ComponentProps, ReactNode } from "react";
+import clsx from "clsx";
+import { useState, type ComponentProps, type ReactNode } from "react";
 import { LiveControls } from "@/components/messageView/LiveControls";
 import { LiveMessageList } from "@/components/messageView/LiveMessageList";
 import { MessageReaderPanel } from "@/components/messageView/MessageReaderPanel";
@@ -8,7 +9,7 @@ import { SendMessagePanel } from "@/components/messageView/SendMessagePanel";
 interface DashboardMainContentProps {
   hasOverlay: boolean;
   headingLabel: string | null | undefined;
-  wsBase: string | null | undefined;
+  serviceUrl: string | null | undefined;
   liveControls: ComponentProps<typeof LiveControls>;
   sendMessage: ComponentProps<typeof SendMessagePanel>;
   showLivePanel: boolean;
@@ -20,7 +21,7 @@ interface DashboardMainContentProps {
 export function DashboardMainContent({
   hasOverlay,
   headingLabel,
-  wsBase,
+  serviceUrl,
   liveControls,
   sendMessage,
   showLivePanel,
@@ -28,19 +29,25 @@ export function DashboardMainContent({
   readerPanel,
   overlays,
 }: DashboardMainContentProps) {
+  const [isSendPanelCollapsed, setIsSendPanelCollapsed] = useState(false);
+
   return (
     <section
-      className={`relative flex h-full min-h-0 ${
-        hasOverlay ? "overflow-hidden" : "overflow-y-auto"
-      }`}
+      className="relative flex h-full min-h-0 overflow-hidden"
+      data-overlay-active={hasOverlay || undefined}
     >
-      <div className="mx-auto flex h-full w-full max-w-6xl flex-col min-h-0 p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-3 mb-8 gap-4">
+      <div
+        className={clsx(
+          "mx-auto flex h-full w-full max-w-6xl flex-col min-h-0",
+          "px-6 pt-6 pb-2"
+        )}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 mb-6 gap-4">
           <div>
             <div className="text-xs text-muted-foreground">
-              <div>{wsBase || ""}</div>
+              <div>{serviceUrl || ""}</div>
             </div>
-            <h2 className="text-3xl font-bold text-foreground mb-2">
+            <h2 className="text-2xl font-bold text-foreground mb-2">
               {headingLabel || "Select a topic"}
             </h2>
             <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
@@ -57,11 +64,17 @@ export function DashboardMainContent({
         </div>
 
         <div className="flex-1 min-h-0">
-          <div className="grid h-full grid-cols-1 gap-6 grid-rows-[auto_1fr]">
-            <SendMessagePanel {...sendMessage} />
+          <div className="grid h-full grid-cols-1 gap-3 grid-rows-[auto_minmax(0,1fr)]">
+            <SendMessagePanel
+              {...sendMessage}
+              isCollapsed={isSendPanelCollapsed}
+              onToggleCollapse={() =>
+                setIsSendPanelCollapsed((previous) => !previous)
+              }
+            />
 
             {showLivePanel ? (
-              <div className="rounded-xl bg-card border border-border p-6 shadow-lg hover:shadow-xl transition-shadow xl:col-span-2 h-full min-h-[24rem] flex flex-col mb-4">
+              <div className="rounded-xl bg-card border border-border p-4 shadow-lg hover:shadow-xl transition-shadow xl:col-span-2 h-full min-h-0 flex flex-col">
                 <div className="flex items-center justify-between mb-4 shrink-0">
                   <h3 className="text-xl font-semibold text-foreground flex items-center gap-2">
                     <svg
@@ -85,9 +98,7 @@ export function DashboardMainContent({
                 </div>
               </div>
             ) : (
-              <div className="flex-1 min-h-0">
-                <MessageReaderPanel {...readerPanel} />
-              </div>
+              <MessageReaderPanel {...readerPanel} />
             )}
           </div>
         </div>

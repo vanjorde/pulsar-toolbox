@@ -1,16 +1,17 @@
-import { getJsonError } from "@/lib/json";
+import { validatePayload } from "@/lib/payload";
+import type { PayloadValidationResult } from "@/lib/payload";
 import { createScenarioStep } from "@/lib/scenario";
 import type { MessageStep, ScenarioStep, WaitStep } from "@/types/scenario";
 
-export function computeScenarioJsonErrors(
+export function computeScenarioPayloadIssues(
   steps: ScenarioStep[],
-): Record<string, string> {
-  const errors: Record<string, string> = {};
+): Record<string, PayloadValidationResult> {
+  const errors: Record<string, PayloadValidationResult> = {};
   for (const step of steps) {
     if (step.type !== "message") continue;
-    const error = getJsonError(step.payload);
-    if (error) {
-      errors[step.id] = error;
+    const validation = validatePayload(step.payload);
+    if (validation.error) {
+      errors[step.id] = validation;
     }
   }
   return errors;

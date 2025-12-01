@@ -1,4 +1,5 @@
-import { Host } from "./pulsar";
+import type { PayloadValidationResult } from "@/lib/payload";
+import type { Host } from "./pulsar";
 export type MessageStep = {
   id: string;
   type: "message";
@@ -60,7 +61,7 @@ export type ScenarioStepCardProps = {
   isActive: boolean;
   isRunning: boolean;
   isCollapsed: boolean;
-  error?: string;
+  payloadIssue?: PayloadValidationResult;
   hosts: Host[];
   disableMoveUp: boolean;
   disableMoveDown: boolean;
@@ -70,7 +71,7 @@ export type ScenarioStepCardProps = {
   onRemove: (stepId: string) => void;
   onUpdate: (stepId: string, updates: Partial<ScenarioStep>) => void;
   onChangeType: (step: ScenarioStep, nextType: "message" | "wait") => void;
-  onFormatJson?: (step: MessageStep) => void;
+  onFormatPayload?: (step: MessageStep) => void;
 };
 
 export type BaseStepOptions = {

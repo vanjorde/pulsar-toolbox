@@ -3,8 +3,8 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { ActiveTopic } from "@/hooks/useLiveTopic";
-import { formatJsonString } from "@/lib/json";
-import { produce, readN, type PulsarMessage } from "@/lib/pulsarWs";
+import { formatPayloadString } from "@/lib/payload";
+import { produce, readN, type PulsarMessage } from "@/lib/pulsarService";
 import type { Host, Template, TopicNode } from "@/types/pulsar";
 import type { SendResult } from "@/types/messaging";
 
@@ -115,7 +115,7 @@ type RefreshActiveTopic = (options?: {
 type ClearActiveTopic = () => void;
 
 interface MessagingOptions {
-  wsBase: string;
+  serviceUrl: string;
   tenant: string;
   ns: string;
   topic: string;
@@ -136,7 +136,7 @@ interface MessagingOptions {
 }
 
 export function useMessaging({
-  wsBase,
+  serviceUrl,
   tenant,
   ns,
   topic,
@@ -163,6 +163,14 @@ export function useMessaging({
   >({});
   const readerAbort = useRef<(() => void) | undefined>(undefined);
 
+  const activeHost = useMemo(
+    () =>
+      activeHostId
+        ? hosts.find((host) => host.id === activeHostId) ?? null
+        : hosts.find((host) => host.serviceUrl === serviceUrl) ?? null,
+    [activeHostId, hosts, serviceUrl]
+  );
+
   const buildFullTopicName = useCallback(
     (targetTenant: string, targetNs: string, targetTopic: string) =>
       `persistent://${targetTenant}/${targetNs}/${targetTopic}`,
@@ -181,7 +189,15 @@ export function useMessaging({
     const target = buildFullTopicName(tenant, ns, topic);
     setSending(true);
     try {
-      const response = await produce({ wsBase, tenant, ns, topic, json });
+      const response = await produce({
+        serviceUrl,
+        tenant,
+        ns,
+        topic,
+        json,
+        caPem: activeHost?.adminCaPem ?? undefined,
+        token: activeHost?.token ?? undefined,
+      });
       const result = interpretProducerResponse(
         response,
         target,
@@ -193,14 +209,14 @@ export function useMessaging({
         const isActiveTarget =
           activeTopic &&
           activeTopic.topic.fullName === target &&
-          activeTopic.host.wsBase === wsBase &&
+          activeTopic.host.serviceUrl === serviceUrl &&
           activeHostId === activeTopic.host.id;
         if (isActiveTarget) {
           await refreshActiveTopic({ showSpinner: false });
         } else {
           const targetHost =
             hosts.find((candidate) => candidate.id === activeHostId) ??
-            hosts.find((candidate) => candidate.wsBase === wsBase);
+            hosts.find((candidate) => candidate.serviceUrl === serviceUrl);
           if (targetHost) {
             const topicNode: TopicNode = {
               fullName: target,
@@ -236,7 +252,7 @@ export function useMessaging({
     refreshActiveTopic,
     tenant,
     topic,
-    wsBase,
+    serviceUrl,
   ]);
 
   const sendTemplateToTopic = useCallback(
@@ -259,22 +275,22 @@ export function useMessaging({
         }
       }
 
-      try {
-        const formatted = formatJsonString(payload, 0);
-        if (formatted.ok) {
-          payload = formatted.value;
-        }
-      } catch {}
+      const formatted = formatPayloadString(payload, 2);
+      if (formatted.ok) {
+        payload = formatted.value;
+      }
 
       const target = buildFullTopicName(node.tenant, node.ns, node.topic);
       setSending(true);
       try {
         const response = await produce({
-          wsBase: host.wsBase,
+          serviceUrl: host.serviceUrl,
           tenant: node.tenant,
           ns: node.ns,
           topic: node.topic,
           json: payload,
+          caPem: host.adminCaPem ?? undefined,
+          token: host.token ?? undefined,
         });
         const result = interpretProducerResponse(
           response,
@@ -329,7 +345,7 @@ export function useMessaging({
     readerAbort.current = undefined;
     try {
       const result = await readN({
-        wsBase,
+        serviceUrl,
         tenant,
         ns,
         topic,
@@ -337,6 +353,8 @@ export function useMessaging({
         limit,
         timeoutMs,
         abortRef: readerAbort,
+        caPem: activeHost?.adminCaPem ?? undefined,
+        token: activeHost?.token ?? undefined,
       });
       setMessages(result);
       toast.success(`Retrieved ${result.length} messages`);
@@ -346,7 +364,17 @@ export function useMessaging({
     } finally {
       setPeeking(false);
     }
-  }, [limit, ns, start, tenant, timeoutMs, topic, wsBase]);
+  }, [
+    activeHost?.adminCaPem,
+    activeHost?.token,
+    limit,
+    ns,
+    start,
+    tenant,
+    timeoutMs,
+    topic,
+    serviceUrl,
+  ]);
 
   const cancelPeek = useCallback(() => {
     readerAbort.current?.();

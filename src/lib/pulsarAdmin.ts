@@ -1,21 +1,40 @@
 import type { Host, NamespaceNode, TopicNode } from "@/types/pulsar";
 import { fetchJsonPortable } from "@/lib/httpPortable";
+import { buildPulsarHttpRequest } from "@/lib/pulsarUrl";
 
-function url(h: Host, p: string) {
-  return `${h.adminBase.replace(/\/$/, "")}${p}`;
+function adminRequest(host: Host, path: string) {
+  if (!host.isAdmin) {
+    throw new Error("Topic discovery is disabled for this host.");
+  }
+  const request = buildPulsarHttpRequest(host.adminBase, path, undefined, {
+    token: host.adminToken ?? host.token ?? undefined,
+  });
+  return {
+    url: request.url,
+    headers: request.token
+      ? { Authorization: `Bearer ${request.token}` }
+      : undefined,
+    caPem:
+      host.adminCaPem && host.adminCaPem.trim().length > 0
+        ? host.adminCaPem
+        : undefined,
+  } as const;
 }
 
 export async function listTenants(h: Host): Promise<string[]> {
-  return fetchJsonPortable<string[]>(url(h, "/admin/v2/tenants"));
+  const { url, headers, caPem } = adminRequest(h, "/admin/v2/tenants");
+  return fetchJsonPortable<string[]>(url, { headers }, { caPem });
 }
 
 export async function listNamespaces(
   h: Host,
   tenantName: string
 ): Promise<NamespaceNode[]> {
-  const arr = await fetchJsonPortable<string[]>(
-    url(h, `/admin/v2/namespaces/${tenantName}`)
+  const { url, headers, caPem } = adminRequest(
+    h,
+    `/admin/v2/namespaces/${tenantName}`
   );
+  const arr = await fetchJsonPortable<string[]>(url, { headers }, { caPem });
   return arr
     .map((full) => {
       const [tenant, ns] = full.split("/");
@@ -35,13 +54,23 @@ export async function listTopics(
   h: Host,
   nsNode: NamespaceNode
 ): Promise<TopicNode[]> {
+  const persistent = adminRequest(
+    h,
+    `/admin/v2/persistent/${nsNode.tenant}/${nsNode.ns}`
+  );
+  const nonPersistent = adminRequest(
+    h,
+    `/admin/v2/non-persistent/${nsNode.tenant}/${nsNode.ns}`
+  );
   const [pers, non] = await Promise.all([
+    fetchJsonPortable<string[]>(persistent.url, { headers: persistent.headers }, { caPem: persistent.caPem }),
     fetchJsonPortable<string[]>(
-      url(h, `/admin/v2/persistent/${nsNode.tenant}/${nsNode.ns}`)
+      nonPersistent.url,
+      { headers: nonPersistent.headers },
+      { caPem: nonPersistent.caPem }
+    ).catch(
+      () => []
     ),
-    fetchJsonPortable<string[]>(
-      url(h, `/admin/v2/non-persistent/${nsNode.tenant}/${nsNode.ns}`)
-    ).catch(() => []),
   ]);
 
   return [...pers, ...non]

@@ -2,19 +2,36 @@
 import { useEffect, useState } from "react";
 
 export function useLocalStorage<T>(key: string, initial: T) {
-  const [state, setState] = useState<T>(() => {
-    if (typeof window === "undefined") return initial as T;
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : (initial as T);
-    } catch {
-      return initial as T;
-    }
-  });
+  const [state, setState] = useState<T>(initial as T);
+  const [isHydrated, setHydrated] = useState(false);
+
   useEffect(() => {
+    if (typeof window === "undefined") {
+      setHydrated(true);
+      return;
+    }
     try {
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch {}
-  }, [key, state]);
+      const raw = window.localStorage.getItem(key);
+      if (raw !== null) {
+        setState(JSON.parse(raw) as T);
+      }
+    } catch {
+      //ignore malformed storage entries and fall back to the initial value
+    } finally {
+      setHydrated(true);
+    }
+  }, [key]);
+
+  useEffect(() => {
+    if (!isHydrated || typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage.setItem(key, JSON.stringify(state));
+    } catch {
+      //swallow storage errors
+    }
+  }, [key, state, isHydrated]);
+
   return [state, setState] as const;
 }
