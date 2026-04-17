@@ -361,7 +361,20 @@ async fn pulsar_produce(
     }))
 }
 
-async fn read_messages(
+async fn cleanup_consumer(consumer: &mut Consumer<Vec<u8>, TokioExecutor>) {
+    if let Err(err) = consumer.unsubscribe().await {
+        log::warn!(
+            "Failed to unsubscribe temporary debug Pulsar subscription: {}",
+            err
+        );
+    }
+
+    if let Err(err) = consumer.close().await {
+        log::warn!("Failed to close Pulsar consumer cleanly: {}", err);
+    }
+}
+
+async fn peek_messages(
     mut consumer: Consumer<Vec<u8>, TokioExecutor>,
     limit: usize,
     timeout_ms: u64,
@@ -369,30 +382,25 @@ async fn read_messages(
     let mut messages = VecDeque::with_capacity(limit);
     let wait_duration = TokioDuration::from_millis(timeout_ms.max(1));
 
-    loop {
+    let read_result: Result<(), String> = loop {
         let next = match timeout(wait_duration, consumer.try_next()).await {
-            Err(_) => break,
-            Ok(Err(err)) => return Err(format_error_chain(&err)),
-            Ok(Ok(None)) => break,
+            Err(_) => break Ok(()),
+            Ok(Err(err)) => break Err(format_error_chain(&err)),
+            Ok(Ok(None)) => break Ok(()),
             Ok(Ok(Some(message))) => message,
         };
 
         let payload = next.payload.data.clone();
         messages.push_back(build_message_value(&next, &payload));
+
         if messages.len() > limit {
             messages.pop_front();
         }
+    };
 
-        if let Err(err) = consumer.ack(&next).await {
-            log::warn!("Failed to acknowledge Pulsar message: {}", err);
-        }
-    }
+    cleanup_consumer(&mut consumer).await;
 
-    if let Err(err) = consumer.close().await {
-        log::warn!("Failed to close Pulsar consumer cleanly: {}", err);
-    }
-
-    Ok(messages.into_iter().collect())
+    read_result.map(|_| messages.into_iter().collect())
 }
 
 #[tauri::command]
@@ -411,18 +419,28 @@ async fn pulsar_read_messages(
         .or(embedded_token);
     let client = build_client(&clean_url, effective_token.as_deref(), ca_pem.as_deref()).await?;
 
-    let mut consumer_builder = client
+    let subscription_name = format!("pulsar-toolbox-peek-{}", Uuid::new_v4());
+
+    let initial = if matches!(
+        start_position.as_deref(),
+        Some(pos) if pos.eq_ignore_ascii_case("earliest")
+    ) {
+        InitialPosition::Earliest
+    } else {
+        InitialPosition::Latest
+    };
+
+    let options = ConsumerOptions::default()
+        .durable(false)
+        .with_initial_position(initial);
+
+    let consumer_builder = client
         .consumer()
         .with_topic(topic.clone())
-        .with_consumer_name(format!("pulsar-toolbox-consumer-{}", Uuid::new_v4()))
+        .with_consumer_name(format!("pulsar-toolbox-peek-consumer-{}", Uuid::new_v4()))
         .with_subscription_type(SubType::Exclusive)
-        .with_subscription(format!("pulsar-toolbox-sub-{}", Uuid::new_v4()));
-
-    if matches!(start_position.as_deref(), Some(pos) if pos.eq_ignore_ascii_case("earliest")) {
-        let mut options = ConsumerOptions::default();
-        options.initial_position = InitialPosition::Earliest;
-        consumer_builder = consumer_builder.with_options(options);
-    }
+        .with_subscription(subscription_name)
+        .with_options(options);
 
     let consumer: Consumer<Vec<u8>, _> = match timeout(
         TokioDuration::from_millis(CONNECT_TIMEOUT_MS),
@@ -442,7 +460,7 @@ async fn pulsar_read_messages(
     let limit = limit.unwrap_or(10).max(1);
     let timeout_ms = timeout_ms.unwrap_or(2000).max(1);
 
-    read_messages(consumer, limit, timeout_ms).await
+    peek_messages(consumer, limit, timeout_ms).await
 }
 
 #[tauri::command]
