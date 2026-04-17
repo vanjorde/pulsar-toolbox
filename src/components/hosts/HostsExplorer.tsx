@@ -88,8 +88,8 @@ export function HostsExplorer({
       error instanceof Error
         ? error.message
         : typeof error === "string"
-        ? error
-        : null;
+          ? error
+          : null;
     const detail = rawMessage ? summarizeError(rawMessage) : "Unknown error.";
     return `Failed to connect to ${host.name}. ${detail}`;
   };
@@ -600,7 +600,7 @@ export function HostsExplorer({
                         {h.name}
                       </div>
                       <div className="text-xs text-muted-foreground truncate">
-                        {h.adminBase}
+                        {h.isAdmin ? h.adminBase : "Non-admin host"}
                       </div>
                     </div>
                   </div>
